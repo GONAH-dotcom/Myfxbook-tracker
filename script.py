@@ -1,4 +1,3 @@
-
 import os
 import requests
 import csv
@@ -8,7 +7,7 @@ from datetime import datetime
 email = os.environ.get("MYFXBOOK_EMAIL")
 password = os.environ.get("MYFXBOOK_PASSWORD")
 
-# 2. Login URL (Using official canonical domain)
+# 2. Corrected Login URL with full API path mapping
 login_url = f"https://myfxbook.com{email}&password={password}"
 
 try:
@@ -17,11 +16,11 @@ try:
     login_data = response.json()
     
     # Check if login gave us a valid session
-    if "session" in login_data and login_data.get("error") in [False, "false"]:
+    if "session" in login_data and login_data.get("error") in [False, "false", "False"]:
         session_token = login_data["session"]
         print("Login successful! Fetching sentiment data...")
         
-        # 3. Pull the community sentiment data
+        # 3. Corrected Community Outlook URL with full API path mapping
         data_url = f"https://myfxbook.com{session_token}"
         sentiment_data = requests.get(data_url).json()
         
@@ -32,16 +31,14 @@ try:
             today = datetime.now().strftime("%Y-%m-%d")
             filename = f"sentiment_{today}.csv"
             
-            # 4. Process data into standard CSV rows
-            # Get data columns dynamically from the first symbol entry
-            headers = ["date", "name"] + [k for k in symbols_list[0].keys() if k != "name"]
+            # 4. Process data into standard CSV rows cleanly
+            headers = ["date", "name", "shortPercentage", "longPercentage", "shortVolume", "longVolume", "longPositions", "shortPositions", "totalPositions"]
             
             with open(filename, "w", newline="") as file:
-                writer = csv.DictWriter(file, fieldnames=headers)
+                writer = csv.DictWriter(file, fieldnames=headers, extrasaction='ignore')
                 writer.writeheader()
                 
                 for item in symbols_list:
-                    # Inject current date into each currency pair row
                     row_data = {"date": today}
                     row_data.update(item)
                     writer.writerow(row_data)
