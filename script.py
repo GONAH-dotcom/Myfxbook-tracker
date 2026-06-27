@@ -2,7 +2,7 @@
 import os
 import requests
 import csv
-from datetime import datetime
+from datetime import datetime, timezone
 
 email = os.environ.get("MYFXBOOK_EMAIL")
 password = os.environ.get("MYFXBOOK_PASSWORD")
@@ -24,10 +24,9 @@ try:
         symbols_list = sentiment_data.get("symbols", [])
 
         if symbols_list:
-            from datetime import timezone
-now = datetime.now(timezone.utc)
-today = now.strftime("%Y-%m-%d")
-hour = now.strftime("%H")
+            now = datetime.now(timezone.utc)
+            today = now.strftime("%Y-%m-%d")
+            hour = now.strftime("%H")
             filename = f"sentiment_{today}_{hour}00.csv"
 
             headers = [
