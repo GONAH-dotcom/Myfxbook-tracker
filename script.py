@@ -29,7 +29,8 @@ try:
 
         if symbols_list:
             today = datetime.now().strftime("%Y-%m-%d")
-            filename = f"sentiment_{today}.csv"
+hour = datetime.now().strftime("%H")
+filename = f"sentiment_{today}_{hour}00.csv"
 
             # 4. Process data into standard CSV rows cleanly
             headers = [
