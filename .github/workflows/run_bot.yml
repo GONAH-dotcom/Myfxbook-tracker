@@ -2,7 +2,7 @@ name: Daily Myfxbook Sentiment Logger
 
 on:
   schedule:
-    - cron: '0 0,4,8,12,16,20 * * *'
+    - cron: '0 0,4,8,12,16,20 * * 1-5'
   workflow_dispatch:
 
 jobs:
