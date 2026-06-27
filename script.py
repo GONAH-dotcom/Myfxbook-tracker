@@ -24,8 +24,10 @@ try:
         symbols_list = sentiment_data.get("symbols", [])
 
         if symbols_list:
-            today = datetime.now().strftime("%Y-%m-%d")
-            hour = datetime.now().strftime("%H")
+            from datetime import timezone
+now = datetime.now(timezone.utc)
+today = now.strftime("%Y-%m-%d")
+hour = now.strftime("%H")
             filename = f"sentiment_{today}_{hour}00.csv"
 
             headers = [
