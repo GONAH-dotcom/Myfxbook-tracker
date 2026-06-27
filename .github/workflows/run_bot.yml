@@ -1,8 +1,16 @@
-- name: Save files back to GitHubrun: |
-        git config --global user.name "Sentiment Bot"
-        git config --global user.email "actions@github.com"
-        git checkout main
-        git add *.csv
-        git commit -m "Automated daily CSV sentiment update" || exit 0
-        git push origin main
+# Fix 1: Make sure you have checkout action
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0  # Full clone, not shallow
 
+# Fix 2: Set Git credentials for push operations
+- name: Configure Git
+  run: |
+    git config user.email "action@github.com"
+    git config user.name "GitHub Action"
+
+# Fix 3: Use GITHUB_TOKEN for push
+- name: Push changes
+  run: git push
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
