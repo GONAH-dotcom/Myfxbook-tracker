@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX Sentiment Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0d0d0d;
+    color: #e8e8e8;
+    min-height: 100vh;
+    padding: 0 0 2rem;
+  }
+
+  .topbar {
+    background: #111;
+    border-bottom: 1px solid #222;
+    padding: 0.85rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.01em;
+  }
+
+  .topbar-sub {
+    font-size: 11px;
+    color: #555;
+    margin-top: 1px;
+  }
+
+  .refresh-btn {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #aaa;
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .refresh-btn:hover { background: #222; color: #fff; }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 0 1rem; }
+
+  .sessions {
+    display: flex;
+    gap: 8px;
+    padding: 1rem 0 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .session {
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid #2a2a2a;
+    color: #555;
+  }
+
+  .session.live {
+    background: #0a1f0a;
+    border-color: #1a4a1a;
+    color: #4caf50;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 0.75rem 0;
+  }
+
+  .stat {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 0.75rem;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-size: 22px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .stat-val.red { color: #e05252; }
+  .stat-val.green { color: #4caf50; }
+  .stat-val.orange { color: #f0a500; }
+
+  .stat-label {
+    font-size: 10px;
+    color: #555;
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .filters {
+    display: flex;
+    gap: 6px;
+    margin: 1rem 0 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .filter {
+    font-size: 12px;
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid #2a2a2a;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+  }
+
+  .filter.active {
+    background: #1a2a1a;
+    border-color: #2a4a2a;
+    color: #4caf50;
+  }
+
+  .section-label {
+    font-size: 10px;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 1rem 0 0.4rem;
+  }
+
+  .pair-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #161616;
+  }
+
+  .pair-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #ccc;
+    width: 68px;
+    flex-shrink: 0;
+    letter-spacing: 0.03em;
+  }
+
+  .bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: #1a1a1a;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+
+  .bar-short { height: 100%; background: #e05252; }
+  .bar-long  { height: 100%; background: #4caf50; }
+
+  .pcts {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    width: 70px;
+    justify-content: flex-end;
+  }
+
+  .pct-s { font-size: 11px; color: #e05252; }
+  .pct-l { font-size: 11px; color: #4caf50; }
+  .pct-div { font-size: 11px; color: #333; }
+
+  .signal {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    width: 76px;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .signal.fl { background: #0a1f0a; color: #4caf50; border: 1px solid #1a4a1a; }
+  .signal.fs { background: #1f0a0a; color: #e05252; border: 1px solid #4a1a1a; }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 0.5rem;
+  }
+
+  .leg {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: #555;
+  }
+
+  .leg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .status-bar {
+    background: #111;
+    border: 1px solid #1e1e1e;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-size: 12px;
+    color: #555;
+    margin: 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4caf50;
+    flex-shrink: 0;
+  }
+
+  .empty { color: #444; font-size: 13px; padding: 1.5rem 0; text-align: center; }
+
+  .error-box {
+    background: #1f0a0a;
+    border: 1px solid #4a1a1a;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #e05252;
+    font-size: 13px;
+    margin: 1rem 0;
+  }
+
+  @media (max-width: 400px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .signal { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-title">FX Sentiment</div>
+    <div class="topbar-sub" id="update-time">Loading...</div>
+  </div>
+  <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+</div>
+
+<div class="container">
+
+  <div class="sessions" id="sessions"></div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="s-total">—</div>
+      <div class="stat-label">Pairs</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val orange" id="s-extreme">—</div>
+      <div class="stat-label">Extreme</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val green" id="s-fl">—</div>
+      <div class="stat-label">Fade long</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val red" id="s-fs">—</div>
+      <div class="stat-label">Fade short</div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="status-bar">
+    <div class="status-dot"></div>
+    <span id="status-text">Fetching latest sentiment data...</span>
+  </div>
+
+  <div class="filters">
+    <button class="filter active" onclick="setFilter('all',this)">All pairs</button>
+    <button class="filter" onclick="setFilter('extreme',this)">Extreme 75%+</button>
+    <button class="filter" onclick="setFilter('fl',this)">Fade long</button>
+    <button class="filter" onclick="setFilter('fs',this)">Fade short</button>
+  </div>
+
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#e05252"></div>Short %</div>
+    <div class="leg"><div class="leg-dot" style="background:#4caf50"></div>Long %</div>
+  </div>
+
+  <div id="pairs-list"></div>
+
+</div>
+
+<script>
+const GITHUB_USER = 'GONAH-dotcom';
+const GITHUB_REPO = 'Myfxbook-tracker';
+
+let allData = [];
+let currentFilter = 'all';
+
+function getSessions() {
+  const h = new Date().getUTCHours();
+  return [
+    { name: 'Asian', live: h >= 22 || h < 8 },
+    { name: 'London', live: h >= 6 && h < 16 },
+    { name: 'New York', live: h >= 12 && h < 21 },
+  ];
+}
+
+function renderSessions() {
+  const sessions = getSessions();
+  document.getElementById('sessions').innerHTML = sessions.map(s =>
+    `<div class="session ${s.live ? 'live' : ''}">${s.name} ${s.live ? '● live' : '● closed'}</div>`
+  ).join('');
+}
+
+function getSignal(row) {
+  const s = parseFloat(row.shortPercentage);
+  const l = parseFloat(row.longPercentage);
+  if (s >= 75) return { type: 'fl', label: 'Fade long' };
+  if (l >= 75) return { type: 'fs', label: 'Fade short' };
+  return null;
+}
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPairs();
+}
+
+function renderPairs() {
+  let data = [...allData];
+  if (currentFilter === 'extreme') data = data.filter(d => parseFloat(d.shortPercentage) >= 75 || parseFloat(d.longPercentage) >= 75);
+  if (currentFilter === 'fl') data = data.filter(d => parseFloat(d.shortPercentage) >= 75);
+  if (currentFilter === 'fs') data = data.filter(d => parseFloat(d.longPercentage) >= 75);
+
+  data.sort((a, b) => Math.max(parseFloat(b.shortPercentage), parseFloat(b.longPercentage)) - Math.max(parseFloat(a.shortPercentage), parseFloat(a.longPercentage)));
+
+  const extreme = allData.filter(d => parseFloat(d.shortPercentage) >= 75 || parseFloat(d.longPercentage) >= 75);
+  const fl = allData.filter(d => parseFloat(d.shortPercentage) >= 75);
+  const fs = allData.filter(d => parseFloat(d.longPercentage) >= 75);
+
+  document.getElementById('s-total').textContent = allData.length;
+  document.getElementById('s-extreme').textContent = extreme.length;
+  document.getElementById('s-fl').textContent = fl.length;
+  document.getElementById('s-fs').textContent = fs.length;
+
+  if (data.length === 0) {
+    document.getElementById('pairs-list').innerHTML = '<div class="empty">No pairs match this filter.</div>';
+    return;
+  }
+
+  document.getElementById('pairs-list').innerHTML = data.map(d => {
+    const s = parseFloat(d.shortPercentage);
+    const l = parseFloat(d.longPercentage);
+    const sig = getSignal(d);
+    return `<div class="pair-row">
+      <span class="pair-name">${d.name}</span>
+      <div class="bar-wrap">
+        <div class="bar-short" style="width:${s}%"></div>
+        <div class="bar-long" style="width:${l}%"></div>
+      </div>
+      <div class="pcts">
+        <span class="pct-s">${s.toFixed(0)}%</span>
+        <span class="pct-div">/</span>
+        <span class="pct-l">${l.toFixed(0)}%</span>
+      </div>
+      ${sig ? `<span class="signal ${sig.type}">${sig.label}</span>` : '<span style="width:76px"></span>'}
+    </div>`;
+  }).join('');
+}
+
+async function getLatestCSV() {
+  const apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/`;
+  const res = await fetch(apiUrl);
+  const files = await res.json();
+  const csvFiles = files.filter(f => f.name.startsWith('sentiment_') && f.name.endsWith('.csv'));
+  if (csvFiles.length === 0) throw new Error('No CSV files found in repo.');
+  csvFiles.sort((a, b) => b.name.localeCompare(a.name));
+  return csvFiles[0];
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',');
+  return lines.slice(1).map(line => {
+    const vals = line.split(',');
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+    return obj;
+  }).filter(d => d.name && parseFloat(d.shortPercentage) + parseFloat(d.longPercentage) > 0);
+}
+
+async function loadData() {
+  document.getElementById('status-text').textContent = 'Fetching latest data from GitHub...';
+  try {
+    const latest = await getLatestCSV();
+    const fname = latest.name;
+    const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${fname}`;
+    const res = await fetch(rawUrl + '?t=' + Date.now());
+    const text = await res.text();
+    allData = parseCSV(text);
+
+    const parts = fname.replace('sentiment_','').replace('.csv','').split('_');
+    const dateStr = parts[0];
+    const hourStr = parts[1] || '0000';
+    document.getElementById('update-time').textContent = `${dateStr} ${hourStr.slice(0,2)}:${hourStr.slice(2)} UTC`;
+    document.getElementById('status-text').textContent = `Loaded: ${fname} — ${allData.length} pairs`;
+    document.getElementById('status-bar').style.borderColor = '#1a4a1a';
+
+    renderPairs();
+  } catch (e) {
+    document.getElementById('status-text').textContent = 'Error loading data: ' + e.message;
+    document.getElementById('status-bar').style.borderColor = '#4a1a1a';
+    document.getElementById('pairs-list').innerHTML = `<div class="error-box">Could not load CSV data. Make sure your repo is public and CSV files exist.<br><br>${e.message}</div>`;
+  }
+}
+
+renderSessions();
+loadData();
+setInterval(renderSessions, 60000);
+</script>
+</body>
+</html>
