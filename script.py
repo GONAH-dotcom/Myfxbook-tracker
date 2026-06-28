@@ -1,11 +1,31 @@
-
 import os
 import requests
 import csv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 
 email = os.environ.get("MYFXBOOK_EMAIL")
 password = os.environ.get("MYFXBOOK_PASSWORD")
+gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
+gmail_user = "gonahcharo1993@gmail.com"
+
+def send_email(subject, body):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = gmail_user
+        msg['To'] = gmail_user
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(gmail_user, gmail_password)
+        server.sendmail(gmail_user, gmail_user, msg.as_string())
+        server.quit()
+        print("Email notification sent!")
+    except Exception as e:
+        print(f"Email failed: {e}")
 
 login_url = f"https://www.myfxbook.com/api/login.json?email={email}&password={password}"
 
@@ -45,11 +65,36 @@ try:
                     writer.writerow(row_data)
 
             print(f"Success! Saved data to {filename}")
+
+            # Find extreme sentiment pairs
+            extreme = []
+            for item in symbols_list:
+                short = float(item.get("shortPercentage", 0))
+                long = float(item.get("longPercentage", 0))
+                name = item.get("name", "")
+                if short >= 75:
+                    extreme.append(f"🔴 {name}: {short}% Short → FADE LONG")
+                elif long >= 75:
+                    extreme.append(f"🔴 {name}: {long}% Long → FADE SHORT")
+
+            # Build email
+            subject = f"🤖 FX Sentiment Update — {today} {hour}00 UTC"
+            if extreme:
+                body = f"Extreme Sentiment Pairs:\n\n" + "\n".join(extreme)
+                body += f"\n\n✅ CSV saved: {filename}"
+            else:
+                body = f"No extreme sentiment pairs at this time.\n\n✅ CSV saved: {filename}"
+
+            send_email(subject, body)
+
         else:
             print("Error: Myfxbook sent back an empty list of symbols.")
+            send_email("❌ FX Bot Error", "Myfxbook returned empty symbols list.")
+
     else:
         print(f"Login Failed. Myfxbook API said: {login_data.get('message', 'Unknown Error')}")
-        print("Please check your GitHub Secrets — email and password may have typos.")
+        send_email("❌ FX Bot Login Failed", "Check your Myfxbook credentials in GitHub Secrets.")
 
 except Exception as e:
     print(f"An unexpected system error occurred: {e}")
+    send_email("❌ FX Bot Error", f"Unexpected error: {e}")
