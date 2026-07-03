@@ -85,86 +85,254 @@ def body_size(c):
     return abs(c["close"] - c["open"])
 
 # ======================================================== SESSION / TIME ====
+# All times based on Daye Quarterly Theory official 90-min cycles
+# Reference: NY time (EDT = UTC-4)
+# Sessions and 90-min blocks as per official Daye QT chart
+
+NY_UTC_OFFSET = 4   # EDT: NY = UTC - 4, so UTC = NY + 4
+
+def utc_to_ny(utc_dt):
+    """Convert UTC datetime to NY time."""
+    return utc_dt - timedelta(hours=NY_UTC_OFFSET)
+
+def ny_to_utc(ny_hour_float):
+    """Convert NY hour (float) to UTC hour (float)."""
+    return (ny_hour_float + NY_UTC_OFFSET) % 24
+
+# Sessions defined in NY time with UTC equivalents
+# Asia:      6:00 PM - 12:00 AM NY  = 22:00 - 04:00 UTC
+# London:   12:00 AM -  6:00 AM NY  = 04:00 - 10:00 UTC
+# New York:  6:00 AM - 12:00 PM NY  = 10:00 - 16:00 UTC
+# Afternoon:12:00 PM -  6:00 PM NY  = 16:00 - 22:00 UTC
+
 SESSIONS = [
-    {"name": "Asian",       "start": 0,  "end": 6},
-    {"name": "London",      "start": 6,  "end": 12},
-    {"name": "New York AM", "start": 12, "end": 18},
-    {"name": "New York PM", "start": 18, "end": 24},
+    {
+        "name": "Asia",
+        "start_ny": 18, "end_ny": 24,    # 6:00 PM - 12:00 AM NY
+        "start_utc": 22, "end_utc": 28,  # 22:00 - 04:00 UTC (28 = 04:00 next day)
+        "tso_ny": 19.5,                  # TSO = 7:30 PM NY
+        "tso_utc_h": 23, "tso_utc_m": 30,  # 23:30 UTC
+        "blocks_ny": [
+            (18.0, 19.5),   # 6:00 PM  - 7:30 PM
+            (19.5, 21.0),   # 7:30 PM  - 9:00 PM
+            (21.0, 22.5),   # 9:00 PM  - 10:30 PM
+            (22.5, 24.0),   # 10:30 PM - 12:00 AM
+        ],
+        "blocks_utc_min": [
+            (22*60,       23*60+30),  # 22:00-23:30 UTC
+            (23*60+30,    25*60),     # 23:30-01:00 UTC (25*60 = next day 01:00)
+            (25*60,       26*60+30),  # 01:00-02:30 UTC
+            (26*60+30,    28*60),     # 02:30-04:00 UTC
+        ],
+    },
+    {
+        "name": "London",
+        "start_ny": 0, "end_ny": 6,      # 12:00 AM - 6:00 AM NY
+        "start_utc": 4, "end_utc": 10,   # 04:00 - 10:00 UTC
+        "tso_ny": 1.5,                   # TSO = 1:30 AM NY
+        "tso_utc_h": 5, "tso_utc_m": 30,   # 05:30 UTC
+        "blocks_ny": [
+            (0.0,  1.5),    # 12:00 AM - 1:30 AM
+            (1.5,  3.0),    # 1:30 AM  - 3:00 AM
+            (3.0,  4.5),    # 3:00 AM  - 4:30 AM
+            (4.5,  6.0),    # 4:30 AM  - 6:00 AM
+        ],
+        "blocks_utc_min": [
+            (4*60,       5*60+30),   # 04:00-05:30 UTC
+            (5*60+30,    7*60),      # 05:30-07:00 UTC
+            (7*60,       8*60+30),   # 07:00-08:30 UTC
+            (8*60+30,    10*60),     # 08:30-10:00 UTC
+        ],
+    },
+    {
+        "name": "New York",
+        "start_ny": 6, "end_ny": 12,     # 6:00 AM - 12:00 PM NY
+        "start_utc": 10, "end_utc": 16,  # 10:00 - 16:00 UTC
+        "tso_ny": 7.5,                   # TSO = 7:30 AM NY
+        "tso_utc_h": 11, "tso_utc_m": 30,  # 11:30 UTC
+        "blocks_ny": [
+            (6.0,  7.5),    # 6:00 AM  - 7:30 AM
+            (7.5,  9.0),    # 7:30 AM  - 9:00 AM
+            (9.0,  10.5),   # 9:00 AM  - 10:30 AM
+            (10.5, 12.0),   # 10:30 AM - 12:00 PM
+        ],
+        "blocks_utc_min": [
+            (10*60,      11*60+30),  # 10:00-11:30 UTC
+            (11*60+30,   13*60),     # 11:30-13:00 UTC
+            (13*60,      14*60+30),  # 13:00-14:30 UTC
+            (14*60+30,   16*60),     # 14:30-16:00 UTC
+        ],
+    },
+    {
+        "name": "Afternoon",
+        "start_ny": 12, "end_ny": 18,    # 12:00 PM - 6:00 PM NY
+        "start_utc": 16, "end_utc": 22,  # 16:00 - 22:00 UTC
+        "tso_ny": 13.5,                  # TSO = 1:30 PM NY
+        "tso_utc_h": 17, "tso_utc_m": 30,  # 17:30 UTC
+        "blocks_ny": [
+            (12.0, 13.5),   # 12:00 PM - 1:30 PM
+            (13.5, 15.0),   # 1:30 PM  - 3:00 PM
+            (15.0, 16.5),   # 3:00 PM  - 4:30 PM
+            (16.5, 18.0),   # 4:30 PM  - 6:00 PM
+        ],
+        "blocks_utc_min": [
+            (16*60,      17*60+30),  # 16:00-17:30 UTC
+            (17*60+30,   19*60),     # 17:30-19:00 UTC
+            (19*60,      20*60+30),  # 19:00-20:30 UTC
+            (20*60+30,   22*60),     # 20:30-22:00 UTC
+        ],
+    },
 ]
 
-def get_session(hour):
+def get_session(utc_now):
+    """Get current session based on UTC time using Daye QT official times."""
+    utc_min = utc_now.hour * 60 + utc_now.minute
+    # Check each session's UTC block ranges
     for s in SESSIONS:
-        if s["start"] <= hour < s["end"]:
-            return s
-    return SESSIONS[0]
+        for b_start, b_end in s["blocks_utc_min"]:
+            # Handle blocks crossing midnight UTC
+            b_start_norm = b_start % (24*60)
+            b_end_norm   = b_end   % (24*60)
+            if b_start_norm <= b_end_norm:
+                if b_start_norm <= utc_min < b_end_norm:
+                    return s
+            else:
+                # Crosses midnight
+                if utc_min >= b_start_norm or utc_min < b_end_norm:
+                    return s
+    return SESSIONS[0]  # default Asia
 
-def get_90min_block(now):
-    session = get_session(now.hour)
-    elapsed = (now.hour - session["start"]) * 60 + now.minute
-    block   = min(int(elapsed // 90) + 1, 4)
-    b_start = session["start"] * 60 + (block - 1) * 90
-    b_end   = b_start + 90
-    return session, block, b_start, b_end
+def get_90min_block(utc_now):
+    """
+    Get current 90-min block (1-4) within the current session.
+    Returns: session, block_num, block_start_utc_min, block_end_utc_min
+    """
+    utc_min = utc_now.hour * 60 + utc_now.minute
+    session = get_session(utc_now)
+    for i, (b_start, b_end) in enumerate(session["blocks_utc_min"]):
+        b_start_norm = b_start % (24*60)
+        b_end_norm   = b_end   % (24*60)
+        if b_start_norm <= b_end_norm:
+            if b_start_norm <= utc_min < b_end_norm:
+                return session, i+1, b_start_norm, b_end_norm
+        else:
+            if utc_min >= b_start_norm or utc_min < b_end_norm:
+                return session, i+1, b_start_norm, b_end_norm
+    # Default to block 1
+    b0 = session["blocks_utc_min"][0]
+    return session, 1, b0[0] % (24*60), b0[1] % (24*60)
 
-def candles_in_block(candles, start_min, end_min, date):
+def candles_in_block(candles, start_utc_min, end_utc_min, ref_date):
+    """Get 15min candles within a UTC minute range."""
     out = []
     for c in candles:
         try:
             d = to_dt(c)
-            if d.date() != date:
-                continue
-            m = d.hour * 60 + d.minute
-            if start_min <= m < end_min:
-                out.append(c)
+            c_min = d.hour * 60 + d.minute
+            if start_utc_min <= end_utc_min:
+                if d.date() == ref_date and start_utc_min <= c_min < end_utc_min:
+                    out.append(c)
+            else:
+                # Crosses midnight UTC
+                prev_date = ref_date - timedelta(days=1)
+                if (d.date() == prev_date and c_min >= start_utc_min) or \
+                   (d.date() == ref_date   and c_min <  end_utc_min):
+                    out.append(c)
         except:
             pass
     return out
 
-# ======================================================== TRUE OPENS ========
-def get_true_week_open(daily, today_date):
-    """True Week Open = Tuesday's daily open (Q2 of week)."""
-    for c in reversed(daily):
-        try:
-            d = datetime.strptime(c["time"], "%Y-%m-%d")
-            if d.weekday() == 1 and d.date() <= today_date:
-                return c["open"]
-        except:
-            pass
-    return None
+def ny_time_str(utc_dt):
+    """Format UTC datetime as NY time string."""
+    ny = utc_to_ny(utc_dt)
+    return ny.strftime("%Y-%m-%d %H:%M NY")
 
-def get_true_day_open(h1, today_date):
-    """True Day Open = first 1H candle of today (00:00 UTC)."""
+def block_ny_label(session, block_num):
+    """Return human-readable NY time label for a block."""
+    blocks_ny = session.get("blocks_ny", [])
+    if block_num < 1 or block_num > len(blocks_ny):
+        return ""
+    s, e = blocks_ny[block_num - 1]
+    def fmt(h):
+        hh = int(h)
+        mm = int((h % 1) * 60)
+        period = "AM" if hh < 12 else "PM"
+        hh12 = hh % 12 or 12
+        return f"{hh12}:{mm:02d}{period}"
+    return f"{fmt(s)}-{fmt(e)} NY"
+
+# ======================================================== TRUE OPENS ========
+def get_true_week_open(h1, today_utc_date):
+    """
+    True Week Open = Tuesday 12:00 AM NY = Tuesday 04:00 UTC (EDT).
+    Q2 of trading week = start of London session Tuesday NY time.
+    """
     for c in h1:
         try:
             d = to_dt(c)
-            if d.date() == today_date and d.hour == 0:
-                return c["open"]
+            # Tuesday 04:00 UTC = Tuesday 12:00 AM NY
+            if d.weekday() == 1 and d.hour == 4 and d.minute == 0 and d.date() <= today_utc_date:
+                return c["open"], d
         except:
             pass
-    return None
+    return None, None
 
-def get_true_session_open(m15, session, today_date):
-    """True Session Open = open of Q2 of session = 90 min into session."""
-    tso_min = session["start"] * 60 + 90
-    for c in m15:
+def get_true_day_open(h1, today_utc_date):
+    """
+    True Day Open = 12:00 AM NY daily = 04:00 UTC.
+    Non-negotiable daily reaction zone.
+    """
+    for c in h1:
         try:
             d = to_dt(c)
-            if d.date() == today_date and (d.hour * 60 + d.minute) == tso_min:
-                return c["open"]
+            if d.date() == today_utc_date and d.hour == 4 and d.minute == 0:
+                return c["open"], d
         except:
             pass
-    return None
+    return None, None
 
-def get_true_90min_open(m15, block_start_min, today_date):
-    """True 90-min Open = open of current 90-min block's first candle."""
-    for c in m15:
-        try:
-            d = to_dt(c)
-            if d.date() == today_date and (d.hour * 60 + d.minute) == block_start_min:
-                return c["open"]
-        except:
-            pass
-    return None
+def get_true_session_open(m15, session, today_utc_date):
+    """
+    True Session Open (TSO) = open of Block 2 of session (90 min into session).
+    Per Daye QT:
+      Asia TSO     : 7:30 PM NY  = 23:30 UTC
+      London TSO   : 1:30 AM NY  = 05:30 UTC
+      New York TSO : 7:30 AM NY  = 11:30 UTC
+      Afternoon TSO: 1:30 PM NY  = 17:30 UTC
+    """
+    tso_h = session["tso_utc_h"]
+    tso_m = session["tso_utc_m"]
+
+    # Asia TSO crosses midnight UTC â€” check previous date
+    search_dates = [today_utc_date]
+    if session["name"] == "Asia" and tso_h == 23:
+        search_dates = [today_utc_date - timedelta(days=1), today_utc_date]
+
+    for search_date in search_dates:
+        for c in m15:
+            try:
+                d = to_dt(c)
+                if d.date() == search_date and d.hour == tso_h and d.minute == tso_m:
+                    return c["open"], d
+            except:
+                pass
+    return None, None
+
+def get_true_90min_open(m15, block_start_utc_min, today_utc_date):
+    """True 90-min Open = first 15min candle of the current block."""
+    b_h = (block_start_utc_min // 60) % 24
+    b_m =  block_start_utc_min % 60
+    # May be on previous UTC date if block crosses midnight
+    for date_offset in [0, -1]:
+        search_date = today_utc_date + timedelta(days=date_offset)
+        for c in m15:
+            try:
+                d = to_dt(c)
+                if d.date() == search_date and d.hour == b_h and d.minute == b_m:
+                    return c["open"], d
+            except:
+                pass
+    return None, None
 
 # ======================================================== STRUCTURE =========
 def find_swings(candles, lookback=3):
@@ -688,14 +856,17 @@ def analyze_pair(symbol, now):
         print(f"  [{symbol}] insufficient data")
         return None
 
-    today = now.date()
+    today    = now.date()
+    now_ny   = utc_to_ny(now)
     session, block_num, b_start, b_end = get_90min_block(now)
 
-    # ---- TRUE OPENS (non-negotiable reaction zones) ----
-    two = get_true_week_open(daily, today)
-    tdo = get_true_day_open(h1, today)
-    tso = get_true_session_open(m15, session, today)
-    t90 = get_true_90min_open(m15, b_start, today)
+    print(f"  [{symbol}] UTC: {now.strftime('%H:%M')} | NY: {now_ny.strftime('%H:%M')} | {session['name']} Block {block_num}/4")
+
+    # ---- TRUE OPENS (non-negotiable reaction zones â€” all in NY time) ----
+    two, two_dt = get_true_week_open(h1, today)
+    tdo, tdo_dt = get_true_day_open(h1, today)
+    tso, tso_dt = get_true_session_open(m15, session, today)
+    t90, t90_dt = get_true_90min_open(m15, b_start, today)
 
     # ---- STEP 1: BIAS â€” Weekly (daily candles) + Daily (4H candles) ----
     weekly_bias, w_highs, w_lows = get_structure_bias(daily, lookback=3)
@@ -804,26 +975,60 @@ def analyze_pair(symbol, now):
     choch, choch_c = detect_choch(m15, trade_dir)
     mss,   mss_c   = detect_mss(m15,   trade_dir)
 
-    # ---- STEP 7: ENTRY FVG (15min â€” inside HTF zone) ----
-    m15_fvgs   = detect_fvg(m15, trade_dir)
-    entry_fvg  = None
+    # ---- STEP 7: ENTRY FVG (15min â€” must align with 4H/1H zone) ----
+    # Two valid entry triggers on 15min:
+    # A) Normal 15min FVG (unfilled, pointing in trade direction)
+    # B) 15min iFVG (filled+flipped FVG, pointing in trade direction)
+    # BOTH require 4H/1H HTF zone confluence â€” not standalone
+
+    m15_fvgs  = detect_fvg(m15,   trade_dir)
+    m15_ifvgs = detect_ifvg(m15,  trade_dir)   # 15min iFVG â€” flipped zones
+    entry_fvg = None
+    entry_type = None   # "fvg" or "ifvg" â€” for email clarity
     buf2 = 1.0 if "XAU" in symbol else 0.0010
 
-    # Entry FVG must be inside or near an HTF zone for confluence
+    # HTF confluence reference: 4H/1H zones already identified
+    htf_zones_for_check = h4_fvgs + h4_ifvg + h4_obs + h1_fvgs + h1_ifvg + h1_obs
+    htf_has_confluence  = htf_zone_hit is not None or near_true_open
+
+    def overlaps_htf_zone(fvg_lo, fvg_hi):
+        """Check if a 15min zone overlaps with any 4H/1H zone."""
+        for z in htf_zones_for_check:
+            z_lo = min(z.get("top", z.get("high", 0)), z.get("bottom", z.get("low", 0)))
+            z_hi = max(z.get("top", z.get("high", 0)), z.get("bottom", z.get("low", 0)))
+            # Overlap exists if ranges intersect
+            if fvg_lo <= z_hi and fvg_hi >= z_lo:
+                return True
+        return False
+
+    # Priority 1: Normal 15min FVG near price + overlaps HTF zone
     for fvg in reversed(m15_fvgs):
         lo = min(fvg["top"], fvg["bottom"])
         hi = max(fvg["top"], fvg["bottom"])
-        # Check if it's near current price
         if not (lo - buf2 <= price <= hi + buf2):
             continue
-        # Check if it has HTF confluence (near an HTF zone)
-        has_htf_confluence = htf_zone_hit is not None or near_true_open
-        if has_htf_confluence:
-            entry_fvg = fvg
+        if overlaps_htf_zone(lo, hi) or htf_has_confluence:
+            entry_fvg  = fvg
+            entry_type = "FVG"
             break
 
-    if not entry_fvg and m15_fvgs:
-        entry_fvg = m15_fvgs[-1]
+    # Priority 2: 15min iFVG near price + overlaps 4H/1H zone (direction already filtered)
+    if not entry_fvg:
+        for fvg in reversed(m15_ifvgs):
+            lo = min(fvg["top"], fvg["bottom"])
+            hi = max(fvg["top"], fvg["bottom"])
+            if not (lo - buf2 <= price <= hi + buf2):
+                continue
+            # iFVG MUST overlap a 4H/1H zone â€” non-negotiable per strategy
+            if overlaps_htf_zone(lo, hi):
+                entry_fvg  = fvg
+                entry_type = "iFVG"
+                break
+
+    # Fallback: nearest 15min FVG in trade direction (only if HTF confluence exists)
+    if not entry_fvg and m15_fvgs and htf_has_confluence:
+        entry_fvg  = m15_fvgs[-1]
+        entry_type = "FVG (fallback)"
 
     # ---- CONDITIONS SCORECARD (7 conditions) ----
     c_bias     = overall_bias != "neutral"                          # 1. HTF structural bias
@@ -866,6 +1071,7 @@ def analyze_pair(symbol, now):
         "choch":        choch,
         "mss":          mss,
         "fvg":          entry_fvg,
+        "entry_type":   entry_type,
         "conds":        conds,
         "c_bias":       c_bias,
         "c_phase":      c_phase,
@@ -925,11 +1131,12 @@ def f(v, dp=5):
     return f"{v:.{dp}f}" if v is not None else "N/A"
 
 def true_opens_str(r, dp):
+    # All true opens displayed in NY time (00:00 NY = key daily boundary)
     return (
-        f"True Week Open    : {f(r['two'], dp)}\n"
-        f"True Day Open     : {f(r['tdo'], dp)}\n"
-        f"True Session Open : {f(r['tso'], dp)}  ({r['session']})\n"
-        f"True 90-min Open  : {f(r['t90'], dp)}"
+        f"True Week Open (Tue 00:00 NY) : {f(r['two'], dp)}\n"
+        f"True Day Open  (00:00 NY)     : {f(r['tdo'], dp)}\n"
+        f"True Session Open (TSO)       : {f(r['tso'], dp)}  [{r['session']} Q2 start NY]\n"
+        f"True 90-min Open              : {f(r['t90'], dp)}"
     )
 
 def checklist_str(r):
@@ -1022,7 +1229,7 @@ Golden Zone    : {'YES' if r['in_fib'] else 'Near zone'}
 ChoCh          : {'Confirmed (body close)' if r['choch'] else 'No'}
 MSS            : {'Confirmed (engulfing ChoCh)' if r['mss'] else 'No'}
 Entry FVG      : {f(fvg.get('bottom',0) if fvg else 0, dp)} - {f(fvg.get('top',0) if fvg else 0, dp)}
-                 OB candle: {ob.get('time','N/A')}
+                 Type: {r.get('entry_type','FVG')} | OB candle: {ob.get('time','N/A')}
 
 TRADE:
 Direction : {d}
@@ -1051,18 +1258,21 @@ def main():
     print("=" * 55)
 
     now     = datetime.now(timezone.utc)
-    weekday = now.weekday()
+    now_ny  = utc_to_ny(now)
+    weekday = now_ny.weekday()   # weekday in NY time (trading day boundary)
     days    = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
     session, block_num, _, _ = get_90min_block(now)
 
     print(f"UTC     : {now.strftime('%Y-%m-%d %H:%M')}")
-    print(f"Day     : {days[weekday]}")
+    print(f"NY Time : {now_ny.strftime('%Y-%m-%d %H:%M')} (EDT UTC-4)")
+    print(f"Day(NY) : {days[weekday]}")
     print(f"Session : {session['name']} | Block {block_num}/4")
+    print(f"TSO     : {session['start_utc']+1}:30 UTC = {session['start_ny']+1 if session['start_ny'] < 23 else (session['start_ny']+1)%24}:30 NY")
 
     if weekday >= 4:
-        print("Friday/Weekend â€” no trading.")
+        print("Friday/Weekend (NY time) â€” no trading.")
         send_email("FX Bot - No Trading Today",
-                   f"Today is {days[weekday]}. Bot resting. See you Monday!")
+                   f"Today is {days[weekday]} NY time. Bot resting. See you Monday!")
         return
 
     signals, watching, predictions = [], [], []
