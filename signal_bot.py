@@ -1120,19 +1120,37 @@ def main():
 
     now     = datetime.now(timezone.utc)
     now_ny  = utc_to_ny(now)
-    weekday = now_ny.weekday()  # use NY time for trading day
+    weekday = now_ny.weekday()  # 0=Mon, 1=Tue ... 6=Sun
     days    = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     session, block_num, _, _ = get_90min_block(now)
 
+    # Asia session on Monday starts at 6:00PM NY on SUNDAY
+    # So Sunday >= 18:00 NY is actually Monday's Asia session = trading day
+    sunday_asia = (weekday == 6 and now_ny.hour >= 18)
+
+    # Friday Asia session ends at 12:00AM NY Saturday
+    # Friday >= 18:00 NY is still valid (Friday Asia session)
+    # Saturday = no trading
+    # Sunday before 6PM = no trading
+
+    is_trading = (weekday <= 3) or (weekday == 4) or sunday_asia
+    # weekday 0-3 = Mon-Thu always trade
+    # weekday 4   = Friday â€” only trade until 6PM NY (Asia of Friday)
+    # weekday 5   = Saturday â€” never trade
+    # weekday 6   = Sunday â€” only trade from 6PM NY (Monday Asia starts)
+
+    # Refine Friday â€” stop at 6PM NY (Asia session end of week)
+    if weekday == 4 and now_ny.hour >= 18:
+        is_trading = False  # Friday after 6PM = weekend begins
+
     print(f"UTC     : {now.strftime('%Y-%m-%d %H:%M')}")
     print(f"NY Time : {now_ny.strftime('%Y-%m-%d %H:%M')} (EDT UTC-4)")
-    print(f"Day(NY) : {days[weekday]}")
+    print(f"Day(NY) : {days[weekday]}{'  <- Monday Asia session active' if sunday_asia else ''}")
     print(f"Session : {session['name']} | Block {block_num}/4")
     print(f"Block   : {block_ny_label(session, block_num)}")
 
-    # Friday + weekend = no trading
-    if weekday >= 4:
-        print("Friday/Weekend (NY) â€” no trading.")
+    if not is_trading:
+        print("Weekend/No trading period (NY) â€” bot resting.")
         send_email("FX Bot â€” No Trading Today",
                    f"Today is {days[weekday]} NY time.\nBot resting. See you Monday! ðŸ’¤")
         return
